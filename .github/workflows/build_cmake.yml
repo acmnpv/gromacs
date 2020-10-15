@@ -134,6 +134,7 @@ jobs:
             -D GMX_GPU=OFF
             -D GMX_SIMD=None
             -D GMX_FFT_LIBRARY=FFTPACK
+            -D GMX_DEVELOPER_BUILD=ON
           RESULT_VARIABLE result
         )
         if (NOT result EQUAL 0)
