@@ -91,7 +91,7 @@ jobs:
       uses: actions/cache@v1.1.0
       with:
         path: .ccache
-        key: ${{ matrix.config.name }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+        key: ${{ matrix.config.name }}-ccache-${{ github.sha }}
         restore-keys: |
           ${{ matrix.config.name }}-ccache-
 
@@ -160,7 +160,7 @@ jobs:
         set(ENV{CCACHE_DIR} "${ccache_basedir}/.ccache")
         set(ENV{CCACHE_COMPRESS} "true")
         set(ENV{CCACHE_COMPRESSLEVEL} "6")
-        set(ENV{CCACHE_MAXSIZE} "400M")
+        set(ENV{CCACHE_MAXSIZE} "600M")
         if ("${{ matrix.config.cxx }}" STREQUAL "cl")
           set(ENV{CCACHE_MAXSIZE} "600M")
         endif()
