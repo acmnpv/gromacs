@@ -39,14 +39,9 @@
 ########################################################################
 # Determine the defaults (this block has no effect if the variables have
 # already been set)
-if((APPLE OR CYGWIN OR ${CMAKE_SYSTEM_NAME} MATCHES "Linux|.*BSD|GNU") AND NOT GMX_BUILD_MDRUN_ONLY)
+if((APPLE OR CYGWIN OR WIN32 OR ${CMAKE_SYSTEM_NAME} MATCHES "Linux|.*BSD|GNU") AND NOT GMX_BUILD_MDRUN_ONLY)
     # Maybe Solaris should be here? Patch this if you know!
     SET(SHARED_LIBS_DEFAULT ON)
-elseif(WIN32)
-    # Support for shared libs on native Windows is a bit new. Its
-    # default might change later if/when we sort things out. Also,
-    # Cray should go here. What variable value can detect it?
-    SET(SHARED_LIBS_DEFAULT OFF)
 else()
     if (NOT DEFINED BUILD_SHARED_LIBS)
         message(STATUS "Defaulting to building static libraries")
@@ -60,7 +55,7 @@ if (GMX_PREFER_STATIC_LIBS)
     set(SHARED_LIBS_DEFAULT OFF)
 endif()
 set(GMX_PREFER_STATIC_LIBS_DEFAULT OFF)
-if (WIN32 AND NOT BUILD_SHARED_LIBS)
+if (NOT BUILD_SHARED_LIBS)
     set(GMX_PREFER_STATIC_LIBS_DEFAULT ON)
 endif()
 if (NOT GMX_BUILD_SHARED_EXE)
