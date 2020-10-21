@@ -53,6 +53,7 @@ else()
     endif()
     SET(SHARED_LIBS_DEFAULT OFF)
 endif()
+
 if (GMX_PREFER_STATIC_LIBS)
     if (NOT DEFINED BUILD_SHARED_LIBS AND SHARED_LIBS_DEFAULT)
         message("Searching for static libraries requested, so the GROMACS libraries will also be static (BUILD_SHARED_LIBS=OFF)")
@@ -67,7 +68,13 @@ endif()
 
 # Declare the user-visible options
 option(BUILD_SHARED_LIBS "Enable shared libraries (can be problematic e.g. with MPI, or on some HPC systems)" ${SHARED_LIBS_DEFAULT})
-set(GMX_PREFER_STATIC_LIBS_DEFAULT OFF)
+
+if (NOT WIN32)
+    set(GMX_PREFER_STATIC_LIBS_DEFAULT OFF)
+else()
+    set(GMX_PREFER_STATIC_LIBS_DEFAULT ON)
+endif()
+
 if (NOT BUILD_SHARED_LIBS)
     set(GMX_PREFER_STATIC_LIBS_DEFAULT ON)
 endif()
@@ -139,6 +146,7 @@ IF( WIN32)
   endif()
 
   IF (GMX_PREFER_STATIC_LIBS)
+      message(WARNING "We managed to get here")
       foreach(build_type "" ${build_types_with_explicit_flags})
           gmx_manage_prefer_static_libs_flags("${build_type}")
       endforeach()
