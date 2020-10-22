@@ -172,6 +172,9 @@ jobs:
           ERROR_VARIABLE output-build-test
           ECHO_OUTPUT_VARIABLE ECHO_ERROR_VARIABLE
         )
+
+        execute_process(COMMAND ccache -s)
+
         if ((NOT result-build EQUAL 0) OR (NOT result-build-test EQUAL 0))
           string(REGEX MATCH "FAILED:.*$" error_message_build "${output-build}")
           string(REGEX MATCH "FAILED:.*$" error_message_build_test "${output-build-test}")
@@ -181,8 +184,6 @@ jobs:
           message("::error::${error_message_build_test}")
           message(FATAL_ERROR "Build failed")
         endif()
-
-        execute_process(COMMAND ccache -s)
 
     - name: Run tests
       shell: cmake -P {0}
