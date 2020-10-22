@@ -134,7 +134,8 @@ IF( WIN32)
         # Change the real CMake variables for the given build type in each
         # language, in the parent scope.
         foreach(language C CXX)
-            string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}} PARENT_SCOPE)
+            string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}})
+            set(CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}} PARENT_SCOPE)
         endforeach()
     endforeach()
   ENDIF()
