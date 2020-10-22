@@ -426,7 +426,16 @@ include(gmxManageMimic)
 #Process shared/static library settings
 ########################################################################
 include(gmxManageSharedLibraries)
-
+foreach(build_type "" ${build_types_with_explicit_flags})
+    if("${build_type}" STREQUAL "")
+        set(punctuation "") # for general compiler flags (e.g.) CMAKE_CXX_FLAGS
+    else()
+        set(punctuation "_") # for build-type-specific compiler flags (e.g.) CMAKE_CXX_FLAGS_RELEASE
+    endif()
+    foreach(language C CXX)
+        message(WARNING "String after is CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}}")
+    endforeach()
+endforeach()
 
 ########################################################################
 # Specify install locations

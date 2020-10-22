@@ -148,7 +148,6 @@ IF( WIN32)
   endif()
 
   IF (GMX_PREFER_STATIC_LIBS)
-      message(WARNING "We managed to get here")
       foreach(build_type "" ${build_types_with_explicit_flags})
           gmx_manage_prefer_static_libs_flags("${build_type}")
       endforeach()
