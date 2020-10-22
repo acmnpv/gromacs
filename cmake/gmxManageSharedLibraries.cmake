@@ -69,13 +69,8 @@ endif()
 # Declare the user-visible options
 option(BUILD_SHARED_LIBS "Enable shared libraries (can be problematic e.g. with MPI, or on some HPC systems)" ${SHARED_LIBS_DEFAULT})
 
-if (NOT WIN32)
-    set(GMX_PREFER_STATIC_LIBS_DEFAULT OFF)
-else()
-    set(GMX_PREFER_STATIC_LIBS_DEFAULT ON)
-endif()
-
-if (NOT BUILD_SHARED_LIBS)
+set(GMX_PREFER_STATIC_LIBS_DEFAULT OFF)
+if (WIN32 OR NOT BUILD_SHARED_LIBS)
     set(GMX_PREFER_STATIC_LIBS_DEFAULT ON)
 endif()
 
@@ -108,24 +103,6 @@ endif()
 # ==========
 # Only things for managing shared libraries and build types on Windows follow
 
-# Change the real CMake variables so we prefer static linking. This
-# should be a function so we can have proper local variables while
-# avoiding duplicating code.
-function(gmx_manage_prefer_static_libs_flags build_type)
-    if("${build_type}" STREQUAL "")
-        set(punctuation "") # for general compiler flags (e.g.) CMAKE_CXX_FLAGS
-    else()
-        set(punctuation "_") # for build-type-specific compiler flags (e.g.) CMAKE_CXX_FLAGS_RELEASE
-    endif()
-
-    # Change the real CMake variables for the given build type in each
-    # language, in the parent scope.
-    foreach(language C CXX)
-        string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}})
-        set(CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}} CACHE INTERNAL "Compiler flag settings")
-    endforeach()
-endfunction()
-
 IF( WIN32)
   if (NOT BUILD_SHARED_LIBS)
       if(NOT GMX_PREFER_STATIC_LIBS)
@@ -147,14 +124,23 @@ IF( WIN32)
   endif()
 
   IF (GMX_PREFER_STATIC_LIBS)
-      foreach(build_type "" ${build_types_with_explicit_flags})
-          gmx_manage_prefer_static_libs_flags("${build_type}")
-      endforeach()
+    # Change the real CMake variables so we prefer static linking.
+    foreach(build_type "" ${build_types_with_explicit_flags})
+        if("${build_type}" STREQUAL "")
+            set(punctuation "") # for general compiler flags (e.g.) CMAKE_CXX_FLAGS
+        else()
+            set(punctuation "_") # for build-type-specific compiler flags (e.g.) CMAKE_CXX_FLAGS_RELEASE
+        endif()
+        # Change the real CMake variables for the given build type in each
+        # language, in the parent scope.
+        foreach(language C CXX)
+            string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}} PARENT_SCOPE)
+        endforeach()
+    endforeach()
   ENDIF()
   IF( CMAKE_C_COMPILER_ID MATCHES "Intel" )
     if(BUILD_SHARED_LIBS) #not sure why incremental building with shared libs doesn't work
         STRING(REPLACE "/INCREMENTAL:YES" "" CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS})
-        set(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS} CACHE INTERNAL FORCE)
     endif()
   ENDIF()
 ENDIF()
