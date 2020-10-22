@@ -122,7 +122,7 @@ function(gmx_manage_prefer_static_libs_flags build_type)
     # language, in the parent scope.
     foreach(language C CXX)
         message(WARNING "String before is CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}}")
-        string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}))
+        string(REPLACE /MD /MT CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}})
         set(CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}} CACHE INTERNAL FORCE)
         message(WARNING "String after is CMAKE_${language}_FLAGS${punctuation}${build_type} ${CMAKE_${language}_FLAGS${punctuation}${build_type}}")
     endforeach()
