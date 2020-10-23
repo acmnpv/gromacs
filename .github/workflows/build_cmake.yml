@@ -115,6 +115,7 @@ jobs:
         set(openmp_use "ON")
         if ("${{ runner.os }}" STREQUAL "Windows")
           set(openmp_use "OFF")
+        endif()
 
         execute_process(
           COMMAND cmake
