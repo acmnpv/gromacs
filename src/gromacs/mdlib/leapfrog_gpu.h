@@ -72,9 +72,10 @@ namespace gmx
  */
 enum class NumTempScaleValues
 {
-    None,    //!< No temperature coupling
-    Single,  //!< Single T-scaling value (one group)
-    Multiple //!< Multiple T-scaling values, need to use T-group indices
+    None,     //!< No temperature coupling
+    Single,   //!< Single T-scaling value (one group)
+    Multiple, //!< Multiple T-scaling values, need to use T-group indices
+    Count     //!< Number of values
 };
 
 /*! \brief Different variants of the Parrinello-Rahman velocity scaling
@@ -86,6 +87,7 @@ enum class VelocityScalingType
 {
     None,     //!< Do not apply velocity scaling (not a PR-coupling run or step)
     Diagonal, //!< Apply velocity scaling using a diagonal matrix
+    Count     //!< Number of values
 };
 
 class LeapFrogGpu
