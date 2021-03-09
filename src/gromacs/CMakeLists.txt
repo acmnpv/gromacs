@@ -423,6 +423,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
      /wd6246  #hides declaration
      >
    )
+    # MSVC has issues with math defines from cmath not showing up
+    add_compile_definitions(_USE_MATH_DEFINES)
 endif()
 
 if (GMX_CLANG_TIDY)
