@@ -38,8 +38,6 @@
 #ifndef GMX_MATH_UNITS_H
 #define GMX_MATH_UNITS_H
 
-#include <math.h>
-
 #include <cmath>
 
 /*
