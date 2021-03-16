@@ -160,12 +160,12 @@ std::vector<real> MsdData::averageMsds() const
  * \tparam x If true, calculate x dimension of displacement
  * \tparam y If true, calculate y dimension of displacement
  * \tparam z If true, calculate z dimension of displacement
- * \param c1 First point
- * \param c2 Second point
+ * \param[in] c1 First point
+ * \param[in] c2 Second point
  * \return Euclidian distance for the given dimension.
  */
 template<bool x, bool y, bool z>
-inline double calcSingleSquaredDistance(RVec c1, const RVec c2)
+inline double calcSingleSquaredDistance(const RVec c1, const RVec c2)
 {
     static_assert(x || y || z, "zero-dimensional MSD selected");
     const DVec firstCoords  = c1.toDVec();
@@ -194,9 +194,8 @@ inline double calcSingleSquaredDistance(RVec c1, const RVec c2)
  * \tparam x If true, calculate x dimension of displacement
  * \tparam y If true, calculate y dimension of displacement
  * \tparam z If true, calculate z dimension of displacement
- * \param c1 First vector
- * \param c2 Second vector
- * \param numberOfValues
+ * \param[in] c1 First vector
+ * \param[in] c2 Second vector
  * \return Per-particle averaged distance
  */
 template<bool x, bool y, bool z>
