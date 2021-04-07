@@ -32,7 +32,7 @@ jobs:
         - {
             name: "macOS Latest gcc with OpenCL", artifact: "macOS-gcc-OpenCL.7z",
             os: macos-latest,
-            cc: "gcc", cxx: "g++",
+            cc: "gcc-10", cxx: "g++-10",
             gpu_var: "OpenCL"
 
           }
