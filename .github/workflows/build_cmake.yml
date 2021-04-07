@@ -126,6 +126,7 @@ jobs:
         if ("${{ runner.os }}" STREQUAL "Windows")
           set(openmp_use "OFF")
         endif()
+        set(gpu_var ${{ matrix.config.gpu_var }})
 
         execute_process(
           COMMAND cmake
