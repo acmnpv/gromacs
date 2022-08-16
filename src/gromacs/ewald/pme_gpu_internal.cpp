@@ -66,9 +66,10 @@
 #include "gromacs/ewald/pme.h"
 #include "gromacs/ewald/pme_coordinate_receiver_gpu.h"
 #include "gromacs/hardware/device_information.h"
-#include "gromacs/math/invertmatrix.h"
+#include "gromacs/math/boxmatrix.h"
 #include "gromacs/math/units.h"
 #include "gromacs/timing/gpu_timing.h"
+#include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
@@ -1314,6 +1315,9 @@ void pme_gpu_reinit(gmx_pme_t*           pme,
 
 void pme_gpu_destroy(PmeGpu* pmeGpu)
 {
+    // Wait for all the tasks to complete before freeing the memory. See #4519.
+    pmeGpu->archSpecific->pmeStream_.synchronize();
+
     /* Free lots of data */
     pme_gpu_free_energy_virial(pmeGpu);
     pme_gpu_free_bspline_values(pmeGpu);
@@ -1615,6 +1619,46 @@ static auto selectSpreadKernelPtr(const PmeGpu*  pmeGpu,
     return kernelPtr;
 }
 
+/*! \brief
+ * Manages synchronization with remote GPU's PP coordinate sender, for a stage of the communication operation.
+ * For thread-MPI, an event associated with a stage of the operation is enqueued to the GPU stream that will be used by the consumer.
+ * For lib-MPI, the CPU task executing this function will wait for a stage to be completed.
+ * In each case, the rank of the sender associated with the corresponding stage is returned.
+ *
+ * \param[in]  pmeGpu                    The PME GPU structure.
+ * \param[in]  pmeCoordinateReceiverGpu  The PME coordinate reciever GPU object
+ * \param[in]  usePipeline               Whether pipelining is in use for PME-PP communication
+ * \param[in]  pipelineStage             Stage of the PME-PP communication pipeline
+ *
+ * \return Rank of remote sender associated with this stage
+ */
+static int manageSyncWithPpCoordinateSenderGpu(const PmeGpu*                  pmeGpu,
+                                               gmx::PmeCoordinateReceiverGpu* pmeCoordinateReceiverGpu,
+                                               bool                           usePipeline   = false,
+                                               int                            pipelineStage = 0)
+{
+    int senderRank;
+    if (GMX_THREAD_MPI)
+    {
+        GpuEventSynchronizer* event;
+        std::tie(senderRank, event) =
+                pmeCoordinateReceiverGpu->receivePpCoordinateSendEvent(pipelineStage);
+        if (usePipeline)
+        {
+            event->enqueueWaitEvent(*(pmeCoordinateReceiverGpu->ppCommStream(senderRank)));
+        }
+        else
+        {
+            event->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
+        }
+    }
+    else
+    {
+        senderRank = pmeCoordinateReceiverGpu->waitForCoordinatesFromAnyPpRank();
+    }
+    return senderRank;
+}
+
 void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                     GpuEventSynchronizer*          xReadyOnDevice,
                     real**                         h_grids,
@@ -1623,7 +1667,8 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                     bool                           spreadCharges,
                     const real                     lambda,
                     const bool                     useGpuDirectComm,
-                    gmx::PmeCoordinateReceiverGpu* pmeCoordinateReceiverGpu)
+                    gmx::PmeCoordinateReceiverGpu* pmeCoordinateReceiverGpu,
+                    gmx_wallcycle*                 wcycle)
 {
     GMX_ASSERT(
             pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
@@ -1736,16 +1781,13 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
 
             for (int i = 0; i < numStagesInPipeline; i++)
             {
-                int senderRank;
-                if (useGpuDirectComm)
-                {
-                    senderRank = pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
-                            i, *(pmeCoordinateReceiverGpu->ppCommStream(i)));
-                }
-                else
-                {
-                    senderRank = i;
-                }
+                wallcycle_start(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
+                int senderRank = manageSyncWithPpCoordinateSenderGpu(
+                        pmeGpu, pmeCoordinateReceiverGpu, kernelParamsPtr->usePipeline != 0, i);
+                wallcycle_stop(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
+
+                wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+                wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
                 // set kernel configuration options specific to this stage of the pipeline
                 std::tie(kernelParamsPtr->pipelineAtomStart, kernelParamsPtr->pipelineAtomEnd) =
@@ -1779,7 +1821,11 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
 #endif
 
                 launchGpuKernel(kernelPtr, config, *launchStream, timingEvent, "PME spline/spread", kernelArgs);
+                wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+                wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
             }
+            wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+            wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
             // Set dependencies for PME stream on all pipeline streams
             for (int i = 0; i < pmeCoordinateReceiverGpu->ppCommNumSenderRanks(); i++)
             {
@@ -1787,14 +1833,23 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                 event.markEvent(*(pmeCoordinateReceiverGpu->ppCommStream(i)));
                 event.enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
             }
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+            wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
         }
         else // pipelining is not in use
         {
             if (useGpuDirectComm) // Sync all PME-PP communications to PME stream
             {
-                pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromAllPpRanks(
-                        pmeGpu->archSpecific->pmeStream_);
+                wallcycle_start(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
+                for (int i = 0; i < pmeCoordinateReceiverGpu->ppCommNumSenderRanks(); i++)
+                {
+                    manageSyncWithPpCoordinateSenderGpu(pmeGpu, pmeCoordinateReceiverGpu);
+                }
+                wallcycle_stop(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
             }
+
+            wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+            wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
 #if c_canEmbedBuffers
             const auto kernelArgs = prepareGpuKernelArguments(kernelPtr, config, kernelParamsPtr);
@@ -1821,6 +1876,9 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                             timingEvent,
                             "PME spline/spread",
                             kernelArgs);
+
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+            wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
         }
 
         pme_gpu_stop_timing(pmeGpu, timingId);
@@ -1831,8 +1889,11 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
     // halo exchange
     if (settings.useDecomposition)
     {
-        pmeGpuGridHaloExchange(pmeGpu);
+        pmeGpuGridHaloExchange(pmeGpu, wcycle);
     }
+
+    wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+    wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
     // full PME GPU decomposition
     const bool convertPmeToFftGridOnGpu = settings.performGPUFFT && settings.useDecomposition;
@@ -1873,6 +1934,9 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
     {
         pme_gpu_copy_output_spread_atom_data(pmeGpu);
     }
+
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+    wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
 }
 
 void pme_gpu_solve(const PmeGpu* pmeGpu,
@@ -2116,7 +2180,11 @@ inline auto selectGatherKernelPtr(const PmeGpu*  pmeGpu,
     return kernelPtr;
 }
 
-void pme_gpu_gather(PmeGpu* pmeGpu, real** h_grids, gmx_parallel_3dfft_t* fftSetup, const float lambda)
+void pme_gpu_gather(PmeGpu*               pmeGpu,
+                    real**                h_grids,
+                    gmx_parallel_3dfft_t* fftSetup,
+                    const float           lambda,
+                    gmx_wallcycle*        wcycle)
 {
     GMX_ASSERT(
             pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
@@ -2124,6 +2192,9 @@ void pme_gpu_gather(PmeGpu* pmeGpu, real** h_grids, gmx_parallel_3dfft_t* fftSet
 
     const auto& settings        = pmeGpu->settings;
     auto*       kernelParamsPtr = pmeGpu->kernelParams.get();
+
+    wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+    wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
     // full PME GPU decomposition
     const bool convertFftToPmeGridOnGpu = settings.performGPUFFT && settings.useDecomposition;
@@ -2165,11 +2236,17 @@ void pme_gpu_gather(PmeGpu* pmeGpu, real** h_grids, gmx_parallel_3dfft_t* fftSet
         pme_gpu_copy_input_gather_atom_data(pmeGpu);
     }
 
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+    wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
+
     // reverse halo exchange
     if (settings.useDecomposition)
     {
-        pmeGpuGridHaloExchangeReverse(pmeGpu);
+        pmeGpuGridHaloExchangeReverse(pmeGpu, wcycle);
     }
+
+    wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
+    wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
     /* Set if we have unit tests */
     const bool   readGlobal = pmeGpu->settings.copyAllOutputs;
@@ -2253,6 +2330,9 @@ void pme_gpu_gather(PmeGpu* pmeGpu, real** h_grids, gmx_parallel_3dfft_t* fftSet
     {
         pme_gpu_copy_output_forces(pmeGpu);
     }
+
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
+    wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
 }
 
 DeviceBuffer<gmx::RVec> pme_gpu_get_kernelparam_forces(const PmeGpu* pmeGpu)

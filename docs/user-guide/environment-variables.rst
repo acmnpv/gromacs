@@ -61,9 +61,6 @@ Output Control
         This can be handy for debugging purposes, because it ensures
         that all files are always totally up-to-date.
 
-``GMX_LOGO_COLOR``
-        set display color for logo in :ref:`gmx view`.
-
 ``GMX_PRINT_LONGFORMAT``
         use long float format when printing
         decimal values.
@@ -164,9 +161,9 @@ Performance and Run Control
 
 ``GMX_ENABLE_DIRECT_GPU_COMM``
         Enable direct GPU communication in multi-rank parallel runs.
-	Note that domain decomposition with CUDA-aware MPI does not support
-	multiple pulses along the second and third decomposition dimension,
-	so for very small systems the feature will be disabled internally.
+        Note that domain decomposition with GPU-aware MPI does not support
+        multiple pulses along the second and third decomposition dimension,
+        so for very small systems the feature will be disabled internally.
 
 ``GMX_ENABLE_STAGED_GPU_TO_CPU_PMEPP_COMM``
         Use a staged implementation of GPU communications for PME force
@@ -260,8 +257,8 @@ Performance and Run Control
 ``GMX_FORCE_GPU_AWARE_MPI``
         Override the result of build- and runtime GPU-aware MPI detection and force the use of
         direct GPU MPI communication. Aimed at cases where the user knows that the MPI library is
-        GPU-aware, but |GROMACS| is not able to detect this. Note that only CUDA builds support
-        such functionality.
+        GPU-aware, but |GROMACS| is not able to detect this. Note that only CUDA and SYCL builds 
+        support such functionality.
 
 ``GMX_FORCE_UPDATE_DEFAULT_GPU``
         Force update to run on the GPU by default, overriding the ``mdrun -update auto`` option. Works similar to setting
@@ -505,9 +502,6 @@ Analysis and Core Functions
         Some force fields (like AMBER) use specific names for N- and C-
         terminal residues (NXXX and CXXX) as :ref:`rtp` entries that are normally renamed. Setting
         this environment variable disables this renaming.
-
-``GMX_FONT``
-        name of X11 font used by :ref:`gmx view`.
 
 ``GMXTIMEUNIT``
         the time unit used in output files, can be

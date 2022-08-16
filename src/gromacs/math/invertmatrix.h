@@ -42,20 +42,12 @@
 #ifndef GMX_MATH_INVERTMATRIX_H
 #define GMX_MATH_INVERTMATRIX_H
 
+#include "gromacs/math/matrix.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/utility/basedefinitions.h"
 
 namespace gmx
 {
-
-/*! \brief Invert a simulation-box matrix in \c src, return in \c dest
- *
- * This routine assumes that src is a simulation-box matrix, i.e. has
- * zeroes in the upper-right triangle. A fatal error occurs if the
- * product of the leading diagonal is too small. The inversion can be
- * done "in place", i.e \c src and \c dest can be the same matrix.
- */
-void invertBoxMatrix(const matrix src, matrix dest);
 
 /*! \brief Invert a general 3x3 matrix in \c src, return in \c dest
  *

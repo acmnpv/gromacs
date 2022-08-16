@@ -40,7 +40,7 @@ CI pipeline jobs.
 Example::
 
     $ python3 -m utility --llvm --doxygen
-    gromacs/ci-ubuntu-20.04-llvm-7-docs
+    gromacs/ci-ubuntu-20.04-llvm-9-docs
 
 See Also:
     :file:`buildall.sh`
@@ -87,26 +87,26 @@ parsers for tools.
 """
 
 parser.add_argument('--cmake', nargs='*', type=str, default=['3.16.3', '3.17.2', '3.18.4', '3.21.2'], # new minimum required versions
-                    help='Selection of CMake version to provide to base image')
+                    help='Selection of CMake version to provide to base image. (default: %(default)s)')
 
 compiler_group = parser.add_mutually_exclusive_group()
-compiler_group.add_argument('--gcc', type=int, nargs='?', const=7, default=7,
-                            help='Select GNU compiler tool chain. (Default) '
+compiler_group.add_argument('--gcc', type=int, default=9,
+                            help='Select GNU compiler tool chain. (default: %(default)s) '
                                  'Some checking is implemented to avoid incompatible combinations')
-compiler_group.add_argument('--llvm', type=str, nargs='?', const='7', default=None,
+compiler_group.add_argument('--llvm', type=str, nargs='?', const='9', default=None,
                             help='Select LLVM compiler tool chain. '
                                  'Some checking is implemented to avoid incompatible combinations')
-# TODO currently the installation merely gets the latest beta version of oneAPI,
-# not a specific version. GROMACS probably doesn't need to address that until
-# oneAPI makes an official release. Also, the resulting container is a mix
-# of packages with different betaXY version numbers, which hopefully works and
-# is what Intel intends...
-compiler_group.add_argument('--oneapi', type=str, nargs='?', const="2021.1.1", default=None,
+# Note that oneAPI packages don't bump their version numbers every
+# version of the umbrella release, so we may need to specify such
+# package versions from time to time.
+compiler_group.add_argument('--oneapi', type=str, nargs='?', const="2022.1.0", default=None,
                             help='Select Intel oneAPI package version.')
+compiler_group.add_argument('--intel-llvm', type=str, nargs='?', const="2022-06", default=None,
+                            help='Select Intel LLVM release (GitHub tag).')
 
 linux_group = parser.add_mutually_exclusive_group()
 linux_group.add_argument('--ubuntu', type=str, nargs='?', const='20.04', default='20.04',
-                         help='Select Ubuntu Linux base image. (default: ubuntu 20.04)')
+                         help='Select Ubuntu Linux base image. (default: %(default)s)')
 linux_group.add_argument('--centos', type=str, nargs='?', const='7', default=None,
                          help='Select Centos Linux base image.')
 
@@ -146,8 +146,7 @@ parser.add_argument('--cp2k', type=str, nargs='?', const='8.2', default=None,
 # Supported Python versions for maintained branches.
 _python_versions = ['3.7.7', '3.8.2', '3.9.1']
 parser.add_argument('--venvs', nargs='*', type=str, default=_python_versions,
-                    help='List of Python versions ("major.minor.patch") for which to install venvs. '
-                         'Default: {}'.format(' '.join(_python_versions)))
+                    help='List of Python versions ("major.minor.patch") for which to install venvs. (default: %(default)s)')
 
 
 def image_name(configuration: argparse.Namespace) -> str:
@@ -169,7 +168,7 @@ def image_name(configuration: argparse.Namespace) -> str:
         if version is not None:
             elements.append(distro + '-' + version)
             break
-    for compiler in ('llvm', 'gcc'):
+    for compiler in ('llvm', 'intel_llvm', 'gcc'):
         version = getattr(configuration, compiler, None)
         if version is not None:
             elements.append(compiler + '-' + str(version).split('.')[0])

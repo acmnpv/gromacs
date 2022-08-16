@@ -78,9 +78,14 @@ static void inline updateVelocities(int                        a,
                                     const ArrayRef<const RVec> invMassPerDim,
                                     rvec* gmx_restrict         v,
                                     const rvec* gmx_restrict   f,
-                                    const rvec                 diagPR,
-                                    const matrix               matrixPR)
+                                    const RVec&                diagPR,
+                                    const Matrix3x3&           matrixPR)
 {
+    RVec parrinelloRahmanScaledVelocity;
+    if (parrinelloRahmanVelocityScaling == ParrinelloRahmanVelocityScaling::Anisotropic)
+    {
+        parrinelloRahmanScaledVelocity = multiplyVectorByMatrix(matrixPR, v[a]);
+    }
     for (int d = 0; d < DIM; d++)
     {
         // TODO: Extract this into policy classes
@@ -97,7 +102,7 @@ static void inline updateVelocities(int                        a,
         if (numStartVelocityScalingValues != NumVelocityScalingValues::None
             && parrinelloRahmanVelocityScaling == ParrinelloRahmanVelocityScaling::Anisotropic)
         {
-            v[a][d] = lambdaStart * v[a][d] - iprod(matrixPR[d], v[a]);
+            v[a][d] = lambdaStart * v[a][d] - parrinelloRahmanScaledVelocity[d];
         }
         if (numStartVelocityScalingValues == NumVelocityScalingValues::None
             && parrinelloRahmanVelocityScaling == ParrinelloRahmanVelocityScaling::Diagonal)
@@ -107,7 +112,7 @@ static void inline updateVelocities(int                        a,
         if (numStartVelocityScalingValues == NumVelocityScalingValues::None
             && parrinelloRahmanVelocityScaling == ParrinelloRahmanVelocityScaling::Anisotropic)
         {
-            v[a][d] -= iprod(matrixPR[d], v[a]);
+            v[a][d] -= parrinelloRahmanScaledVelocity[d];
         }
         v[a][d] += f[a][d] * invMassPerDim[a][d] * dt;
         if (numEndVelocityScalingValues != NumVelocityScalingValues::None)
@@ -156,9 +161,9 @@ static void inline scalePositions(int a, real lambda, rvec* gmx_restrict x)
     }
 }
 
-//! Helper function diagonalizing the PR matrix if possible
+//! Is the PR matrix diagonal?
 template<ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
-static inline bool diagonalizePRMatrix(matrix matrixPR, rvec diagPR)
+static inline bool canTreatPRScalingMatrixAsDiagonal(const Matrix3x3& matrixPR)
 {
     if (parrinelloRahmanVelocityScaling != ParrinelloRahmanVelocityScaling::Anisotropic)
     {
@@ -166,17 +171,7 @@ static inline bool diagonalizePRMatrix(matrix matrixPR, rvec diagPR)
     }
     else
     {
-        if (matrixPR[YY][XX] == 0 && matrixPR[ZZ][XX] == 0 && matrixPR[ZZ][YY] == 0)
-        {
-            diagPR[XX] = matrixPR[XX][XX];
-            diagPR[YY] = matrixPR[YY][YY];
-            diagPR[ZZ] = matrixPR[ZZ][ZZ];
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        return (matrixPR(YY, XX) == 0 && matrixPR(ZZ, XX) == 0 && matrixPR(ZZ, YY) == 0);
     }
 }
 
@@ -278,20 +273,15 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
                                      ? endVelocityScaling_[0]
                                      : 1.0;
 
-    const bool isScalingMatrixDiagonal =
-            diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
+    const bool treatPRScalingMatrixAsDiagonal =
+            canTreatPRScalingMatrixAsDiagonal<parrinelloRahmanVelocityScaling>(matrixPR_);
+    const RVec diagonalOfPRScalingMatrix = treatPRScalingMatrixAsDiagonal ? diagonal(matrixPR_) : RVec{};
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
     const int homenr = mdAtoms_->mdatoms()->homenr;
 
-// const variables are best shared and MSVC requires it, but gcc-8 & gcc-9 don't agree how to write
-// that... https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v, f)
-#else
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v, f, invMassPerDim) \
-            shared(nth, homenr, lambdaStart, lambdaEnd, isScalingMatrixDiagonal)
-#endif
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v, f, invMassPerDim) \
+        shared(nth, homenr, lambdaStart, lambdaEnd, treatPRScalingMatrixAsDiagonal, diagonalOfPRScalingMatrix)
     for (int th = 0; th < nth; th++)
     {
         try
@@ -301,7 +291,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
 
             for (int a = start_th; a < end_th; a++)
             {
-                if (isScalingMatrixDiagonal)
+                if (treatPRScalingMatrixAsDiagonal)
                 {
                     updateVelocities<numStartVelocityScalingValues, ParrinelloRahmanVelocityScaling::Diagonal, numEndVelocityScalingValues>(
                             a,
@@ -315,7 +305,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
                 else
@@ -332,7 +322,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
             }
@@ -365,24 +355,15 @@ void Propagator<IntegrationStage::LeapFrog>::run()
                                      ? endVelocityScaling_[0]
                                      : 1.0;
 
-    const bool isScalingMatrixDiagonal =
-            diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
+    const bool treatPRScalingMatrixAsDiagonal =
+            canTreatPRScalingMatrixAsDiagonal<parrinelloRahmanVelocityScaling>(matrixPR_);
+    const RVec diagonalOfPRScalingMatrix = treatPRScalingMatrixAsDiagonal ? diagonal(matrixPR_) : RVec{};
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
     const int homenr = mdAtoms_->mdatoms()->homenr;
 
-// const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
-// https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-// const variables are best shared and MSVC requires it, but gcc-8 & gcc-9 don't agree how to write
-// that... https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(x, xp, v, f) \
-            firstprivate(nth, homenr, lambdaStart, lambdaEnd, isScalingMatrixDiagonal)
-#else
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) \
-            shared(x, xp, v, f, invMassPerDim)                               \
-                    firstprivate(nth, homenr, lambdaStart, lambdaEnd, isScalingMatrixDiagonal)
-#endif
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(x, xp, v, f, invMassPerDim) \
+        firstprivate(nth, homenr, lambdaStart, lambdaEnd, treatPRScalingMatrixAsDiagonal, diagonalOfPRScalingMatrix)
     for (int th = 0; th < nth; th++)
     {
         try
@@ -392,7 +373,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
 
             for (int a = start_th; a < end_th; a++)
             {
-                if (isScalingMatrixDiagonal)
+                if (treatPRScalingMatrixAsDiagonal)
                 {
                     updateVelocities<numStartVelocityScalingValues, ParrinelloRahmanVelocityScaling::Diagonal, numEndVelocityScalingValues>(
                             a,
@@ -406,7 +387,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
                 else
@@ -423,7 +404,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
                 updatePositions(a, timestep_, x, xp, v);
@@ -457,22 +438,15 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
                                      ? endVelocityScaling_[0]
                                      : 1.0;
 
-    const bool isScalingMatrixDiagonal =
-            diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
+    const bool treatPRScalingMatrixAsDiagonal =
+            canTreatPRScalingMatrixAsDiagonal<parrinelloRahmanVelocityScaling>(matrixPR_);
+    const RVec diagonalOfPRScalingMatrix = treatPRScalingMatrixAsDiagonal ? diagonal(matrixPR_) : RVec{};
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
     const int homenr = mdAtoms_->mdatoms()->homenr;
 
-// const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
-// https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(x, xp, v, f) \
-            firstprivate(nth, homenr, lambdaStart, lambdaEnd, isScalingMatrixDiagonal)
-#else
-#    pragma omp parallel for num_threads(nth) schedule(static) default(none) \
-            shared(x, xp, v, f, invMassPerDim)                               \
-                    firstprivate(nth, homenr, lambdaStart, lambdaEnd, isScalingMatrixDiagonal)
-#endif
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(x, xp, v, f, invMassPerDim) \
+        firstprivate(nth, homenr, lambdaStart, lambdaEnd, treatPRScalingMatrixAsDiagonal, diagonalOfPRScalingMatrix)
     for (int th = 0; th < nth; th++)
     {
         try
@@ -482,7 +456,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
 
             for (int a = start_th; a < end_th; a++)
             {
-                if (isScalingMatrixDiagonal)
+                if (treatPRScalingMatrixAsDiagonal)
                 {
                     updateVelocities<numStartVelocityScalingValues, ParrinelloRahmanVelocityScaling::Diagonal, numEndVelocityScalingValues>(
                             a,
@@ -496,7 +470,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
                 else
@@ -513,7 +487,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
                             invMassPerDim,
                             v,
                             f,
-                            diagPR_,
+                            diagonalOfPRScalingMatrix,
                             matrixPR_);
                 }
                 updatePositions(a, timestep_, x, xp, v);
@@ -547,10 +521,8 @@ void Propagator<IntegrationStage::ScaleVelocities>::run()
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
     const int homenr = mdAtoms_->mdatoms()->homenr;
 
-// const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
-// https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v) \
-        firstprivate(nth, homenr, lambdaStart)
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) \
+        shared(v, lambdaStart, nth, homenr)
     for (int th = 0; th < nth; th++)
     {
         try
@@ -586,7 +558,6 @@ Propagator<integrationStage>::Propagator(double               timestep,
     doSingleEndVelocityScaling_(false),
     doGroupEndVelocityScaling_(false),
     scalingStepVelocity_(-1),
-    diagPR_{ 0 },
     matrixPR_{ { 0 } },
     scalingStepPR_(-1),
     mdAtoms_(mdAtoms),
@@ -886,17 +857,13 @@ PropagatorCallback Propagator<integrationStage>::positionScalingCallback()
 }
 
 template<IntegrationStage integrationStage>
-ArrayRef<rvec> Propagator<integrationStage>::viewOnPRScalingMatrix()
+Matrix3x3* Propagator<integrationStage>::viewOnPRScalingMatrix()
 {
     GMX_RELEASE_ASSERT(hasParrinelloRahmanScaling<integrationStage>(),
                        formatString("Parrinello-Rahman scaling not implemented for %s",
                                     integrationStepNames[integrationStage])
                                .c_str());
-
-    clear_mat(matrixPR_);
-    // gcc-5 needs this to be explicit (all other tested compilers would be ok
-    // with simply returning matrixPR)
-    return ArrayRef<rvec>(matrixPR_);
+    return &matrixPR_;
 }
 
 template<IntegrationStage integrationStage>
@@ -914,9 +881,8 @@ template<IntegrationStage integrationStage>
 static PropagatorConnection getConnection(Propagator<integrationStage> gmx_unused* propagator,
                                           const PropagatorTag&                     propagatorTag)
 {
-    // gmx_unused is needed because gcc-7 & gcc-8 can't see that
-    // propagator is used for all IntegrationStage options
-
+    // gmx_unused is needed because gcc-9 can't see that propagator is
+    // used for all IntegrationState options.
     PropagatorConnection propagatorConnection{ propagatorTag };
 
     if constexpr (hasStartVelocityScaling<integrationStage>() || hasEndVelocityScaling<integrationStage>())

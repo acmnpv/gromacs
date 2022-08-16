@@ -114,7 +114,7 @@ You should strive to use the most recent version of your
 compiler. Since we require full C++17 support the minimum
 compiler versions supported by the GROMACS team are
 
-* GNU (gcc/libstdc++) 7
+* GNU (gcc/libstdc++) 9
 * LLVM (clang/libc++) 7
 * Microsoft (MSVC) 2019
 
@@ -140,8 +140,8 @@ libraries and require no further configuration. If your vendor's
 compiler also manages the standard library library via compiler flags,
 these will be honored. For configuration of other compilers, read on.
 
-On Linux, the clang compilers use the libstdc++ which
-comes with gcc as the default C++ library. For |Gromacs|, we require
+On Linux, the clang compilers typically use for their C++ library
+the libstdc++ which comes with g++. For |Gromacs|, we require
 the compiler to support libstc++ version 7.1 or higher. To select a
 particular libstdc++ library, provide the path to g++ with
 ``-DGMX_GPLUSPLUS_PATH=/path/to/g++``.
@@ -333,20 +333,11 @@ slightly faster.
 Using MKL
 ~~~~~~~~~
 
-Use MKL bundled with Intel compilers by setting up the compiler
-environment, e.g., through ``source /path/to/compilervars.sh intel64``
-or similar before running CMake including setting
-``-DGMX_FFT_LIBRARY=mkl``.
-
-If you need to customize this further, use
-
-::
-
-    cmake -DGMX_FFT_LIBRARY=mkl \
-          -DMKL_LIBRARIES="/full/path/to/libone.so;/full/path/to/libtwo.so" \
-          -DMKL_INCLUDE_DIR="/full/path/to/mkl/include"
-
-The full list and order(!) of libraries you require are found in Intel's MKL documentation for your system.
+Use OneAPI MKL(>=2021.3) by setting up the environment, e.g., through
+``source /opt/intel/oneapi/setvars.sh`` or
+``source /opt/intel/oneapi/mkl/latest/env/vars.sh``
+or manually setting environment variable ``MKLROOT=/full/path/to/mkl``.
+Then run CMake with setting ``-DGMX_FFT_LIBRARY=mkl``.
 
 Using ARM Performance Libraries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -378,9 +369,6 @@ Other optional build components
   matrix manipulation, but they do not provide any benefits for normal
   simulations. Configuring these is discussed at
   `linear algebra libraries`_.
-* The built-in |Gromacs| trajectory viewer ``gmx view`` requires X11 and
-  Motif/Lesstif libraries and header files. You may prefer to use
-  third-party software for visualization, such as VMD_ or PyMol_.
 * An external TNG library for trajectory-file handling can be used
   by setting ``-DGMX_EXTERNAL_TNG=yes``, but TNG
   |GMX_TNG_MINIMUM_REQUIRED_VERSION| is bundled in the |Gromacs|
@@ -1380,7 +1368,7 @@ much everywhere, it is important that we tell you where we really know
 it works because we have tested it.
 Every commit in our git source code repository
 is currently tested with a range of configuration options on x86 with
-gcc versions including 7 and 11,
+gcc versions including 9 and 11,
 clang versions including 7 and 13,
 CUDA versions 11.0 and 11.4.2,
 and

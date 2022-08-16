@@ -568,19 +568,6 @@ if (GMX_EXTRAE)
   endif()
 endif()
 
-option(GMX_X11 "Use X window system" OFF)
-if (GMX_X11)
-    find_package(X11)
-    # X11 includes/libraries are only set in the ngmx subdirectory!
-    if(NOT X11_FOUND)
-        message(FATAL_ERROR
-                "X11 include files and/or libraries were not found. "
-                "Set GMX_X11=OFF to compile without X11 support. "
-                "gmx view will not be available.")
-    endif()
-    include_directories(SYSTEM ${X11_INCLUDE_DIR})
-endif()
-
 include(ThreadMPI)
 # Enable core threading facilities
 tmpi_enable_core("${CMAKE_SOURCE_DIR}/src/external/thread_mpi/include")
@@ -644,6 +631,7 @@ if(GMX_GPU)
         if (GMX_GPU_NB_CLUSTER_SIZE AND NOT "${GMX_GPU_NB_CLUSTER_SIZE}" EQUAL 8)
             message(FATAL_ERROR "Setting GMX_GPU_NB_CLUSTER_SIZE is not supported in CUDA (the default GMX_GPU_NB_CLUSTER_SIZE=8 is used)")
         endif()
+        set(GMX_GPU_NB_CLUSTER_SIZE 8 CACHE STRING "Cluster size used by the nonbonded kernel.")
     else()
         # use the legacy GMX_OPENCL_NB_CLUSTER_SIZE variable if set, otherwise set the defaults
         if (GMX_OPENCL_NB_CLUSTER_SIZE)
@@ -884,8 +872,6 @@ mark_as_advanced(GMX_PYTHON_PACKAGE)
 find_package(ImageMagick QUIET COMPONENTS convert)
 include(gmxTestImageMagick)
 GMX_TEST_IMAGEMAGICK(IMAGE_CONVERT_POSSIBLE)
-# TODO: Resolve circular dependency between docs, gromacs, and python_packaging
-add_subdirectory(docs)
 add_subdirectory(share)
 add_subdirectory(scripts)
 add_subdirectory(api)
@@ -898,6 +884,8 @@ endif()
 if(GMX_PYTHON_PACKAGE)
     add_subdirectory(python_packaging)
 endif()
+
+add_subdirectory(docs)
 
 gmx_cpack_write_config()
 
