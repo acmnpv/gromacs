@@ -41,7 +41,6 @@ target_sources(topology PRIVATE
 		       exclusionblocks.cpp
 		       forcefieldparameters.cpp
 		       idef.cpp
-		       ifunc.cpp
 		       index.cpp
 		       invblock.cpp
 		       mtop_atomloops.cpp
