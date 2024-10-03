@@ -47,7 +47,6 @@
 
 #include <array>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace gmx
@@ -756,46 +755,21 @@ private:
 //! \}
 
 
-template<const std::string_view& firstString,
-         const std::string_view& secondString,
-         const std::string_view& thirdString,
-         const std::string_view& fourthString,
-         const std::string_view& fifthString,
-         const std::string_view& sixthString>
+template<std::string_view const&... inputStrings>
 struct CompileTimeStringJoin
 {
     // Join all strings into a single std::array of chars
     static constexpr auto impl() noexcept
     {
-        constexpr std::size_t bufferLength = firstString.size() + secondString.size()
-                                             + thirdString.size() + fourthString.size()
-                                             + fifthString.size() + sixthString.size();
+        constexpr std::size_t              bufferLength = (std::size(inputStrings) + ... + 0);
         std::array<char, bufferLength + 1> internalStorage{};
-        size_t                             i = 0;
-        for (auto charPos : firstString)
-        {
-            internalStorage[i++] = charPos;
-        }
-        for (auto charPos : secondString)
-        {
-            internalStorage[i++] = charPos;
-        }
-        for (auto charPos : thirdString)
-        {
-            internalStorage[i++] = charPos;
-        }
-        for (auto charPos : fourthString)
-        {
-            internalStorage[i++] = charPos;
-        }
-        for (auto charPos : fifthString)
-        {
-            internalStorage[i++] = charPos;
-        }
-        for (auto charPos : sixthString)
-        {
-            internalStorage[i++] = charPos;
-        }
+        auto append = [i = 0, &internalStorage](auto const& string) mutable {
+            for (auto charPos : string)
+            {
+                internalStorage[i++] = charPos;
+            }
+        };
+        (append(inputStrings), ...);
         internalStorage[bufferLength] = 0;
         return internalStorage;
     }
@@ -804,15 +778,9 @@ struct CompileTimeStringJoin
     // View as a std::string_view
     static constexpr std::string_view value{ stringArray.data(), stringArray.size() - 1 };
 };
-// Helper to get the value out for six
-template<const std::string_view& firstString,
-         const std::string_view& secondString,
-         const std::string_view& thirdString,
-         const std::string_view& fourthString,
-         const std::string_view& fifthString,
-         const std::string_view& sixthString>
-static constexpr auto CompileTimeStringJoin_v =
-        CompileTimeStringJoin<firstString, secondString, thirdString, fourthString, fifthString, sixthString>::value;
+// Helper to get the value out
+template<std::string_view const&... inputStrings>
+static constexpr auto CompileTimeStringJoin_v = CompileTimeStringJoin<inputStrings...>::value;
 
 } // namespace gmx
 

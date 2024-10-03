@@ -474,21 +474,13 @@ TEST(CompileTimeStringJoin, Works)
     static constexpr std::string_view firstLiteral  = "Hello";
     static constexpr std::string_view secondLiteral = " World";
     static constexpr std::string_view thirdLiteral  = ", GROMACS";
-    static constexpr std::string_view dummyValue;
 
-    static constexpr std::string_view combinedString3 =
-            gmx::CompileTimeStringJoin_v<firstLiteral, secondLiteral, thirdLiteral, dummyValue, dummyValue, dummyValue>;
-    static_assert(combinedString3.size() == 20);
-    static_assert(combinedString3 == std::string_view{ "Hello World, GROMACS" });
+    static constexpr std::string_view combinedString =
+            gmx::CompileTimeStringJoin_v<firstLiteral, secondLiteral, thirdLiteral>;
+    static_assert(combinedString.size() == 20);
+    static_assert(combinedString == std::string_view{ "Hello World, GROMACS" });
 
-    EXPECT_EQ(std::string(combinedString3), "Hello World, GROMACS");
-
-    static constexpr std::string_view combinedString6 =
-            gmx::CompileTimeStringJoin_v<firstLiteral, secondLiteral, thirdLiteral, firstLiteral, secondLiteral, thirdLiteral>;
-    static_assert(combinedString6.size() == 40);
-    static_assert(combinedString6 == std::string_view{ "Hello World, GROMACSHello World, GROMACS" });
-
-    EXPECT_EQ(std::string(combinedString6), "Hello World, GROMACSHello World, GROMACS");
+    EXPECT_EQ(std::string(combinedString), "Hello World, GROMACS");
 }
 
 } // namespace
