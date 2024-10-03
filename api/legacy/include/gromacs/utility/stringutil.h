@@ -754,7 +754,10 @@ private:
 
 //! \}
 
+// The compile time join does not work with MSVC, causes ICE. Use runtime version there
+#if !defined(_MSC_VER)
 
+//! Combines string literals at compile time to final string.
 template<std::string_view const&... inputStrings>
 struct CompileTimeStringJoin
 {
@@ -781,6 +784,9 @@ struct CompileTimeStringJoin
 // Helper to get the value out
 template<std::string_view const&... inputStrings>
 static constexpr auto CompileTimeStringJoin_v = CompileTimeStringJoin<inputStrings...>::value;
+
+#endif
+
 
 } // namespace gmx
 

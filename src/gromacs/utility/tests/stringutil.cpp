@@ -469,6 +469,9 @@ TEST_F(TextLineWrapperTest, WrapsCorrectlyWithExtraWhitespace)
     checkText(wrapper.wrapToString(g_wrapTextWhitespace), "WrappedAt14WithTrailingWhitespace");
 }
 
+// This doesn't work with MSVC, causes ICE
+#if !defined(_MSC_VER)
+
 TEST(CompileTimeStringJoin, Works)
 {
     static constexpr std::string_view firstLiteral  = "Hello";
@@ -482,6 +485,8 @@ TEST(CompileTimeStringJoin, Works)
 
     EXPECT_EQ(std::string(combinedString), "Hello World, GROMACS");
 }
+
+#endif
 
 } // namespace
 } // namespace test
