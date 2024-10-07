@@ -71,6 +71,7 @@
 #include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/booltype.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
@@ -1456,11 +1457,10 @@ void push_cmaptype(Directive                         d,
                 "Incorrect number of atomtypes (%d) in cmap type %d\n", nct, bt[F_CMAP].numCmaps_);
         wi->addError(message);
     }
-    std::vector<int> atomTypes = atomTypesFromAtomNames(
-            atomtypes,
-            bondAtomType,
-            gmx::constArrayRefFromArray<const std::string>(cmapAtomTypes.cbegin(), nral),
-            wi);
+    gmx::ArrayRef<const std::string> cmapAtomTypesSelection =
+            gmx::constArrayRefFromArray(cmapAtomTypes.cbegin(), nral);
+    std::vector<int> atomTypes =
+            atomTypesFromAtomNames(atomtypes, bondAtomType, cmapAtomTypesSelection, wi);
     std::array<real, MAXFORCEPARAM> forceParam = { NOTSET };
 
     /* Push the bond to the bondlist */
