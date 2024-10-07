@@ -1457,7 +1457,10 @@ void push_cmaptype(Directive                         d,
         wi->addError(message);
     }
     std::vector<int> atomTypes = atomTypesFromAtomNames(
-            atomtypes, bondAtomType, gmx::constArrayRefFromArray(cmapAtomTypes.cbegin(), nral), wi);
+            atomtypes,
+            bondAtomType,
+            gmx::constArrayRefFromArray<const std::string>(cmapAtomTypes.cbegin(), nral),
+            wi);
     std::array<real, MAXFORCEPARAM> forceParam = { NOTSET };
 
     /* Push the bond to the bondlist */
