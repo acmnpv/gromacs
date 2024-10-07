@@ -1457,10 +1457,9 @@ void push_cmaptype(Directive                         d,
                 "Incorrect number of atomtypes (%d) in cmap type %d\n", nct, bt[F_CMAP].numCmaps_);
         wi->addError(message);
     }
-    gmx::ArrayRef<const std::string> cmapAtomTypesSelection =
-            gmx::constArrayRefFromArray(cmapAtomTypes.cbegin(), nral);
-    std::vector<int> atomTypes =
-            atomTypesFromAtomNames(atomtypes, bondAtomType, cmapAtomTypesSelection, wi);
+    gmx::ArrayRef<const std::string> cmapAtomTypesArrayRef = cmapAtomTypes;
+    std::vector<int>                 atomTypes             = atomTypesFromAtomNames(
+            atomtypes, bondAtomType, cmapAtomTypesArrayRef.subArray(0, nral), wi);
     std::array<real, MAXFORCEPARAM> forceParam = { NOTSET };
 
     /* Push the bond to the bondlist */
